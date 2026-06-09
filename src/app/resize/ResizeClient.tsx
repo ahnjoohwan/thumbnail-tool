@@ -629,6 +629,7 @@ export default function ResizeClient({ defaultTab = "resize" }: Props) {
     }), 1);
     const BASE = 180;
     const globalDs = BASE / maxDim;
+    const MIN_SHORT = 50; // 짧은 쪽 최소 px
     return (
       <div className="mt-6 border-t pt-5">
         <p className="text-sm font-medium text-gray-700 mb-3">사이즈별 미리보기 <span className="text-gray-400 font-normal text-xs ml-1">클릭하여 편집</span></p>
@@ -637,7 +638,7 @@ export default function ResizeClient({ defaultTab = "resize" }: Props) {
             const p = allSizes.find((p) => p.key === key);
             const state = perSize[key];
             if (!p || !state) return null;
-            const pDs = globalDs;
+            const pDs = Math.max(globalDs, MIN_SHORT / Math.min(p.w, p.h));
             const isActive = key === activeKey;
             const previewBg = topTab === "thumbnail" ? currentBgColor : resizeMode === "cutout" ? detectedBg : "#e5e7eb";
             return (
