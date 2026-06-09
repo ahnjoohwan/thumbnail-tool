@@ -564,10 +564,10 @@ export default function ResizeClient() {
           {/* Custom size */}
           <div style={{ marginTop: 10, display: "flex", gap: 5, alignItems: "center" }}>
             <input type="number" placeholder="너비" value={customW} onChange={e => setCustomW(e.target.value)} onKeyDown={e => e.key === "Enter" && addCustomSize()}
-              style={{ width: 60, minWidth: 0, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 7, padding: "5px 7px", fontSize: 11, outline: "none", color: "#1d1d1f" }} />
-            <span style={{ fontSize: 11, color: "#aeaeb2" }}>×</span>
+              style={{ flex: "0 0 56px", width: 56, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 7, padding: "5px 6px", fontSize: 11, outline: "none", color: "#1d1d1f" }} />
+            <span style={{ fontSize: 11, color: "#aeaeb2", flexShrink: 0 }}>×</span>
             <input type="number" placeholder="높이" value={customH} onChange={e => setCustomH(e.target.value)} onKeyDown={e => e.key === "Enter" && addCustomSize()}
-              style={{ width: 60, minWidth: 0, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 7, padding: "5px 7px", fontSize: 11, outline: "none", color: "#1d1d1f" }} />
+              style={{ flex: "0 0 56px", width: 56, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 7, padding: "5px 6px", fontSize: 11, outline: "none", color: "#1d1d1f" }} />
             <button onClick={addCustomSize} disabled={!customW || !customH}
               style={{ padding: "5px 8px", borderRadius: 7, background: "#1d1d1f", color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 500, opacity: (!customW || !customH) ? 0.35 : 1 }}>
               추가
