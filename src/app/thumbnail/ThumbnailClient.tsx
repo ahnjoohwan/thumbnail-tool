@@ -399,7 +399,7 @@ export default function ThumbnailClient() {
     <div style={{ display: "flex", height: "calc(100vh - 48px)", background: "#F5F5F7", fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif" }}>
 
       {/* ── Left Panel ── */}
-      <aside style={{ width: 256, minWidth: 256, background: "#fff", borderRight: "1px solid rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+      <aside style={{ width: 288, minWidth: 288, background: "#fff", borderRight: "1px solid rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
 
         {/* Upload */}
         <div style={{ padding: "20px 16px 0" }}>
