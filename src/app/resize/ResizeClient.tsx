@@ -407,6 +407,8 @@ export default function ResizeClient() {
       canvas.width = outW; canvas.height = outH;
       const ctx = canvas.getContext("2d");
       if (!ctx) return resolve(null);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       if (fillColor) { ctx.fillStyle = fillColor; ctx.fillRect(0, 0, outW, outH); }
       ctx.drawImage(imgEl, 0, 0, imgEl.naturalWidth, imgEl.naturalHeight, state.x, state.y, natDims.w * state.scale, natDims.h * state.scale);
       canvas.toBlob(resolve, file?.type || "image/jpeg", 0.95);

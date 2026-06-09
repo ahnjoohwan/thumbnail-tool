@@ -342,6 +342,8 @@ export default function ThumbnailClient() {
       canvas.width = outW; canvas.height = outH;
       const ctx = canvas.getContext("2d");
       if (!ctx) return resolve(null);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, outW, outH);
       if (shadowEnabled) {
