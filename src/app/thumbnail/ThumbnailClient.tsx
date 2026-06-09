@@ -590,9 +590,20 @@ export default function ThumbnailClient() {
                       const pDs = Math.max(globalPds, 48 / Math.min(p.w, p.h));
                       const act = key === activeKey;
                       return (
-                        <div key={key} onClick={() => setActiveKey(key)} style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", border: `2px solid ${act ? APPLE_BLUE : "rgba(0,0,0,0.08)"}`, boxShadow: act ? `0 0 0 3px rgba(0,113,227,0.15)` : "none", transition: "all 0.15s" }}>
-                          <PreviewCanvas imgEl={imgEl} natDims={natDims} state={state} outW={p.w} outH={p.h} pDs={pDs} bgColor={currentBgColor} shadowEnabled={shadowEnabled} shadowBlur={shadowBlur} />
-                          <div style={{ padding: "4px 6px", background: act ? "rgba(0,113,227,0.06)" : "#FAFAFA", textAlign: "center", fontSize: 10, fontWeight: act ? 600 : 400, color: act ? APPLE_BLUE : "#6e6e73" }}>{p.label}</div>
+                        <div key={key} onClick={() => setActiveKey(key)} style={{ cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                          <div style={{ height: 164, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+                            <div style={{
+                              borderRadius: 10, overflow: "hidden",
+                              border: `2px solid ${act ? APPLE_BLUE : "rgba(0,0,0,0.08)"}`,
+                              boxShadow: act ? `0 0 0 3px rgba(0,113,227,0.15)` : "none",
+                              transition: "all 0.15s",
+                            }}>
+                              <PreviewCanvas imgEl={imgEl} natDims={natDims} state={state} outW={p.w} outH={p.h} pDs={pDs} bgColor={currentBgColor} shadowEnabled={shadowEnabled} shadowBlur={shadowBlur} />
+                            </div>
+                          </div>
+                          <div style={{ marginTop: 5, textAlign: "center", fontSize: 10, fontWeight: act ? 600 : 400, color: act ? APPLE_BLUE : "#6e6e73" }}>
+                            {p.label}
+                          </div>
                         </div>
                       );
                     })}
