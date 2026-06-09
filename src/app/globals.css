@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+body {
+  background: #ffffff;
+  color: #171717;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
