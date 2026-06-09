@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import JSZip from "jszip";
+import PreviewCanvas from "@/components/PreviewCanvas";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type ImgState = { x: number; y: number; scale: number };
@@ -650,9 +651,7 @@ export default function ResizeClient() {
                           boxShadow: act ? `0 0 0 3px rgba(0,113,227,0.15)` : "none",
                           transition: "all 0.15s",
                         }}>
-                          <div style={{ position: "relative", width: p.w * pDs, height: p.h * pDs, background: bg, overflow: "hidden" }}>
-                            <img src={imgEl.src} alt="" draggable={false} style={{ position: "absolute", left: state.x * pDs, top: state.y * pDs, width: natDims.w * state.scale * pDs, height: natDims.h * state.scale * pDs, pointerEvents: "none", userSelect: "none" }} />
-                          </div>
+                          <PreviewCanvas imgEl={imgEl} natDims={natDims} state={state} outW={p.w} outH={p.h} pDs={pDs} bgColor={bg} />
                           <div style={{ padding: "4px 6px", background: act ? "rgba(0,113,227,0.06)" : "#FAFAFA", textAlign: "center", fontSize: 10, fontWeight: act ? 600 : 400, color: act ? APPLE_BLUE : "#6e6e73" }}>
                             {p.label}
                           </div>
