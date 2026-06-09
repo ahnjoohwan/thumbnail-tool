@@ -621,16 +621,23 @@ export default function ResizeClient({ defaultTab = "resize" }: Props) {
   );
 
   // 공용 미리보기 그리드
-  const renderPreviewGrid = () => (
-    imgEl && natDims && selectedKeys.length > 0 ? (
+  const renderPreviewGrid = () => {
+    if (!imgEl || !natDims || selectedKeys.length === 0) return null;
+    const maxDim = Math.max(...selectedKeys.map(key => {
+      const p = allSizes.find(p => p.key === key);
+      return p ? Math.max(p.w, p.h) : 0;
+    }), 1);
+    const BASE = 180;
+    const globalDs = BASE / maxDim;
+    return (
       <div className="mt-6 border-t pt-5">
         <p className="text-sm font-medium text-gray-700 mb-3">사이즈별 미리보기 <span className="text-gray-400 font-normal text-xs ml-1">클릭하여 편집</span></p>
-        <div className="flex gap-4 flex-wrap">
+        <div className="flex gap-4 flex-wrap items-end">
           {selectedKeys.map((key) => {
             const p = allSizes.find((p) => p.key === key);
             const state = perSize[key];
             if (!p || !state) return null;
-            const pDs = Math.min(160 / p.w, 160 / p.h);
+            const pDs = globalDs;
             const isActive = key === activeKey;
             const previewBg = topTab === "thumbnail" ? currentBgColor : resizeMode === "cutout" ? detectedBg : "#e5e7eb";
             return (
@@ -646,8 +653,8 @@ export default function ResizeClient({ defaultTab = "resize" }: Props) {
           })}
         </div>
       </div>
-    ) : null
-  );
+    );
+  };
 
   return (
     <div className="px-2 max-w-7xl pb-24">
