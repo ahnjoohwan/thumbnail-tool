@@ -337,16 +337,23 @@ export default function ResizeClient() {
     const { w: outW, h: outH } = activePreset;
     const scx = (outW / 2 - activeState.x) / activeState.scale;
     const scy = (outH / 2 - activeState.y) / activeState.scale;
+    // 현재 사이즈의 줌 비율 계산 (기본 스케일 대비 얼마나 줌했는지)
+    const margin = 0.08;
+    const defaultScale = contentBounds && !isCover
+      ? Math.min(outW * (1 - 2 * margin) / contentBounds.w, outH * (1 - 2 * margin) / contentBounds.h, Math.max(outW / natDims.w, outH / natDims.h) * 4)
+      : isCover ? Math.max(outW / natDims.w, outH / natDims.h) : Math.min(outW / natDims.w, outH / natDims.h);
+    const zoomRatio = defaultScale > 0 ? activeState.scale / defaultScale : 1;
     setPerSize(prev => {
       const next = { ...prev };
-      const margin = 0.08;
       for (const key of selectedKeys) {
         if (key === activeKey) continue;
         const p = allSizes.find(p => p.key === key);
         if (!p) continue;
-        const scale = contentBounds && !isCover
+        // 각 사이즈의 기본 스케일에 동일한 줌 비율 적용
+        const baseScale = contentBounds && !isCover
           ? Math.min(p.w * (1 - 2 * margin) / contentBounds.w, p.h * (1 - 2 * margin) / contentBounds.h, Math.max(p.w / natDims.w, p.h / natDims.h) * 4)
-          : activeState.scale;
+          : isCover ? Math.max(p.w / natDims.w, p.h / natDims.h) : Math.min(p.w / natDims.w, p.h / natDims.h);
+        const scale = baseScale * zoomRatio;
         next[key] = clampState({ x: p.w / 2 - scx * scale, y: p.h / 2 - scy * scale, scale }, natDims.w, natDims.h, p.w, p.h, isCover);
       }
       return next;
@@ -620,7 +627,7 @@ export default function ResizeClient() {
                       <Divider />
                       <button onClick={handleCenter} style={ctrlBtn}>중앙</button>
                       <button onClick={() => setShowGuides(v => !v)} style={{ ...ctrlBtn, ...(showGuides ? { background: "rgba(0,113,227,0.08)", color: APPLE_BLUE, borderColor: "rgba(0,113,227,0.3)" } : {}) }}>가이드</button>
-                      {selectedKeys.length > 1 && <button onClick={handleSyncAll} style={{ ...ctrlBtn, color: APPLE_BLUE, borderColor: "rgba(0,113,227,0.3)", background: "rgba(0,113,227,0.06)" }}>전체 동기화</button>}
+                      {selectedKeys.length > 1 && <button onClick={handleSyncAll} style={{ ...ctrlBtn, color: APPLE_BLUE, borderColor: "rgba(0,113,227,0.3)", background: "rgba(0,113,227,0.06)" }}>전체 적용</button>}
                       <Divider />
                       <button onClick={handleReset} style={{ ...ctrlBtn, color: "#6e6e73" }}>초기화</button>
                     </div>
