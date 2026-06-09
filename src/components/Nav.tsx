@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const tabs = [
-  { href: "/resize", label: "이미지 리사이즈" },
+  { href: "/resize", label: "썸네일 리사이즈" },
   { href: "/thumbnail", label: "썸네일 만들기" },
 ];
 
