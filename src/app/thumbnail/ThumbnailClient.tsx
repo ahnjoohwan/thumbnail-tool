@@ -5,9 +5,9 @@ import JSZip from "jszip";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type ImgState = { x: number; y: number; scale: number };
-type ResizeMode = "cutout" | "scene";
 type ContentBounds = { x: number; y: number; w: number; h: number };
 type SizePreset = { key: string; w: number; h: number; label: string };
+type BgOption = { key: string; label: string; color: string };
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const SIZE_PRESETS: SizePreset[] = [
@@ -23,6 +23,11 @@ const SIZE_PRESETS: SizePreset[] = [
   { label: "1010×473",  w: 1010, h: 473,  key: "1010x473"  },
 ];
 
+const BG_OPTIONS: BgOption[] = [
+  { key: "white", label: "화이트", color: "#FFFFFF" },
+  { key: "gray",  label: "그레이", color: "#F4F0F1" },
+];
+
 const CANVAS_MAX = 500;
 const APPLE_BLUE = "#0071E3";
 
@@ -31,33 +36,9 @@ function calcDs(w: number, h: number) {
   return Math.min(CANVAS_MAX / w, CANVAS_MAX / h, 1);
 }
 
-function detectBgColor(img: HTMLImageElement): string {
+function detectContentBounds(img: HTMLImageElement): ContentBounds | null {
   try {
-    const scale = Math.min(1, 400 / Math.max(img.naturalWidth, img.naturalHeight));
-    const w = Math.round(img.naturalWidth * scale);
-    const h = Math.round(img.naturalHeight * scale);
-    const s = Math.max(3, Math.round(Math.min(w, h) * 0.05));
-    const canvas = document.createElement("canvas");
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return "#ffffff";
-    ctx.drawImage(img, 0, 0, w, h);
-    const regions = [
-      ctx.getImageData(0, 0, s, s),
-      ctx.getImageData(w - s, 0, s, s),
-      ctx.getImageData(0, h - s, s, s),
-      ctx.getImageData(w - s, h - s, s, s),
-    ];
-    let r = 0, g = 0, b = 0, count = 0;
-    for (const reg of regions)
-      for (let i = 0; i < reg.data.length; i += 4) { r += reg.data[i]; g += reg.data[i + 1]; b += reg.data[i + 2]; count++; }
-    return `rgb(${Math.round(r / count)},${Math.round(g / count)},${Math.round(b / count)})`;
-  } catch { return "#ffffff"; }
-}
-
-function detectContentBounds(img: HTMLImageElement, bgColor: string, threshold = 15): ContentBounds | null {
-  try {
-    const sampleScale = Math.min(1, 1000 / Math.max(img.naturalWidth, img.naturalHeight));
+    const sampleScale = Math.min(1, 800 / Math.max(img.naturalWidth, img.naturalHeight));
     const sw = Math.round(img.naturalWidth * sampleScale);
     const sh = Math.round(img.naturalHeight * sampleScale);
     const canvas = document.createElement("canvas");
@@ -66,22 +47,17 @@ function detectContentBounds(img: HTMLImageElement, bgColor: string, threshold =
     if (!ctx) return null;
     ctx.drawImage(img, 0, 0, sw, sh);
     const { data } = ctx.getImageData(0, 0, sw, sh);
-    const m = bgColor.match(/\d+/g);
-    if (!m || m.length < 3) return null;
-    const [br, bg, bb] = m.map(Number);
     const rowCounts = new Int32Array(sh);
     const colCounts = new Int32Array(sw);
     for (let y = 0; y < sh; y++)
       for (let x = 0; x < sw; x++) {
         const i = (y * sw + x) * 4;
-        if (data[i + 3] < 128) continue;
-        const diff = Math.abs(data[i] - br) + Math.abs(data[i + 1] - bg) + Math.abs(data[i + 2] - bb);
-        if (diff > threshold) { rowCounts[y]++; colCounts[x]++; }
+        if (data[i + 3] > 20) { rowCounts[y]++; colCounts[x]++; }
       }
     const maxRow = rowCounts.reduce((a, b) => Math.max(a, b), 0);
     const maxCol = colCounts.reduce((a, b) => Math.max(a, b), 0);
-    const minR = Math.max(3, Math.round(maxRow * 0.15));
-    const minC = Math.max(3, Math.round(maxCol * 0.15));
+    const minR = Math.max(3, Math.round(maxRow * 0.1));
+    const minC = Math.max(3, Math.round(maxCol * 0.1));
     let minY = -1, maxY = -1, minX = -1, maxX = -1;
     for (let y = 0; y < sh; y++) if (rowCounts[y] >= minR) { if (minY < 0) minY = y; maxY = y; }
     for (let x = 0; x < sw; x++) if (colCounts[x] >= minC) { if (minX < 0) minX = x; maxX = x; }
@@ -95,39 +71,27 @@ function detectContentBounds(img: HTMLImageElement, bgColor: string, threshold =
   } catch { return null; }
 }
 
-function makeInitialState(
-  natW: number, natH: number, outW: number, outH: number,
-  cover: boolean, cb?: ContentBounds | null, margin = 0.08
-): ImgState {
-  if (cb && !cover) {
-    const scale = Math.min(
-      outW * (1 - 2 * margin) / cb.w,
-      outH * (1 - 2 * margin) / cb.h,
-      Math.max(outW / natW, outH / natH) * 4
-    );
+function makeInitialState(natW: number, natH: number, outW: number, outH: number, cb?: ContentBounds | null, margin = 0.08): ImgState {
+  if (cb) {
+    const scale = Math.min(outW * (1 - 2 * margin) / cb.w, outH * (1 - 2 * margin) / cb.h, Math.max(outW / natW, outH / natH) * 4);
     const cx = cb.x + cb.w / 2;
     const cy = cb.y + cb.h / 2;
     return { x: outW / 2 - cx * scale, y: outH / 2 - cy * scale, scale };
   }
-  const scale = cover ? Math.max(outW / natW, outH / natH) : Math.min(outW / natW, outH / natH);
+  const scale = Math.min(outW / natW, outH / natH);
   return { x: (outW - natW * scale) / 2, y: (outH - natH * scale) / 2, scale };
 }
 
-function clampState(s: ImgState, natW: number, natH: number, outW: number, outH: number, mustCover: boolean): ImgState {
+function clampState(s: ImgState, natW: number, natH: number, outW: number, outH: number): ImgState {
   const w = natW * s.scale, h = natH * s.scale;
   let { x, y } = s;
-  if (mustCover) {
-    if (x > 0) x = 0; if (y > 0) y = 0;
-    if (x + w < outW) x = outW - w; if (y + h < outH) y = outH - h;
-  } else {
-    if (x < -(w * 0.7)) x = -(w * 0.7); if (x > outW - w * 0.3) x = outW - w * 0.3;
-    if (y < -(h * 0.7)) y = -(h * 0.7); if (y > outH - h * 0.3) y = outH - h * 0.3;
-  }
+  if (x < -(w * 0.7)) x = -(w * 0.7); if (x > outW - w * 0.3) x = outW - w * 0.3;
+  if (y < -(h * 0.7)) y = -(h * 0.7); if (y > outH - h * 0.3) y = outH - h * 0.3;
   return { ...s, x, y };
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
-export default function ResizeClient() {
+export default function ThumbnailClient() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDragging = useRef(false);
@@ -137,10 +101,12 @@ export default function ResizeClient() {
   const [file, setFile] = useState<File | null>(null);
   const [imgEl, setImgEl] = useState<HTMLImageElement | null>(null);
   const [natDims, setNatDims] = useState<{ w: number; h: number } | null>(null);
-  const [detectedBg, setDetectedBg] = useState("rgb(255,255,255)");
   const [contentBounds, setContentBounds] = useState<ContentBounds | null>(null);
 
-  const [resizeMode, setResizeMode] = useState<ResizeMode>("cutout");
+  const [selectedBgs, setSelectedBgs] = useState<string[]>(["white"]);
+  const [activeBg, setActiveBg] = useState<string>("white");
+  const [shadowEnabled, setShadowEnabled] = useState(false);
+  const [shadowBlur, setShadowBlur] = useState(20);
   const [showGuides, setShowGuides] = useState(false);
 
   const [selectedKeys, setSelectedKeys] = useState<string[]>(SIZE_PRESETS.map(p => p.key));
@@ -158,7 +124,8 @@ export default function ResizeClient() {
   const allSizes = [...SIZE_PRESETS, ...customSizes];
   const activePreset = allSizes.find(p => p.key === activeKey) ?? null;
   const activeState = perSize[activeKey] ?? null;
-  const isCover = resizeMode === "scene";
+
+  const currentBgColor = BG_OPTIONS.find(b => b.key === (selectedBgs.includes(activeBg) ? activeBg : selectedBgs[0]))?.color ?? "#FFFFFF";
 
   const outputDs = activePreset ? calcDs(activePreset.w, activePreset.h) : 1;
   const frameW = activePreset ? Math.round(activePreset.w * outputDs) : 0;
@@ -166,7 +133,6 @@ export default function ResizeClient() {
   const PAD = activePreset ? Math.round(Math.min(frameW, frameH) * 0.18) : 40;
   const stageW = frameW + PAD * 2;
   const stageH = frameH + PAD * 2;
-  const stageBg = isCover ? "#e5e7eb" : detectedBg;
 
   // ── Handle file ────────────────────────────────────────────────────────
   const handleFile = useCallback((f: File) => {
@@ -174,37 +140,19 @@ export default function ResizeClient() {
     const url = URL.createObjectURL(f);
     const img = new Image();
     img.onload = () => {
-      const bg = detectBgColor(img);
-      const cb = detectContentBounds(img, bg);
+      const cb = detectContentBounds(img);
       setFile(f);
       setImgEl(img);
       setNatDims({ w: img.naturalWidth, h: img.naturalHeight });
-      setDetectedBg(bg);
       setContentBounds(cb);
-      const cover = resizeMode === "scene";
       const next: Record<string, ImgState> = {};
       for (const p of SIZE_PRESETS)
-        next[p.key] = makeInitialState(img.naturalWidth, img.naturalHeight, p.w, p.h, cover, !cover ? cb : null);
+        next[p.key] = makeInitialState(img.naturalWidth, img.naturalHeight, p.w, p.h, cb);
       setPerSize(next);
       setActiveKey(SIZE_PRESETS[0].key);
     };
     img.src = url;
-  }, [resizeMode]);
-
-  // ── Mode change → reposition all ──────────────────────────────────────
-  useEffect(() => {
-    if (!natDims) return;
-    const cover = resizeMode === "scene";
-    setPerSize(prev => {
-      const next = { ...prev };
-      for (const key of Object.keys(next)) {
-        const p = allSizes.find(p => p.key === key);
-        if (p) next[key] = makeInitialState(natDims.w, natDims.h, p.w, p.h, cover, !cover ? contentBounds : null);
-      }
-      return next;
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resizeMode]);
+  }, []);
 
   // ── Canvas draw ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -216,20 +164,22 @@ export default function ResizeClient() {
     canvas.width = stageW;
     canvas.height = stageH;
 
-    // Stage bg
     ctx.fillStyle = "#E5E5EA";
     ctx.fillRect(0, 0, stageW, stageH);
 
-    // Frame bg
-    ctx.fillStyle = stageBg;
+    ctx.fillStyle = currentBgColor;
     ctx.fillRect(PAD, PAD, frameW, frameH);
 
-    // Image (clipped to frame)
     if (imgEl && activeState && natDims) {
       ctx.save();
       ctx.beginPath();
       ctx.rect(PAD, PAD, frameW, frameH);
       ctx.clip();
+      if (shadowEnabled) {
+        ctx.shadowColor = "rgba(0,0,0,0.30)";
+        ctx.shadowBlur = shadowBlur * outputDs;
+        ctx.shadowOffsetY = Math.round(shadowBlur * 0.4 * outputDs);
+      }
       ctx.drawImage(
         imgEl, 0, 0, imgEl.naturalWidth, imgEl.naturalHeight,
         PAD + activeState.x * outputDs,
@@ -240,19 +190,16 @@ export default function ResizeClient() {
       ctx.restore();
     }
 
-    // Overlay masks
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.fillRect(0, 0, stageW, PAD);
     ctx.fillRect(0, PAD + frameH, stageW, PAD + 1);
     ctx.fillRect(0, PAD, PAD, frameH);
     ctx.fillRect(PAD + frameW, PAD, PAD + 1, frameH);
 
-    // Frame border
     ctx.strokeStyle = "rgba(0,113,227,0.9)";
     ctx.lineWidth = 1.5;
     ctx.strokeRect(PAD + 0.75, PAD + 0.75, frameW - 1.5, frameH - 1.5);
 
-    // Guides
     if (showGuides && frameW > 0 && frameH > 0) {
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
@@ -274,14 +221,13 @@ export default function ResizeClient() {
       ctx.arc(PAD + frameW / 2, PAD + frameH / 2, 3.5, 0, Math.PI * 2);
       ctx.fill();
     }
-  }, [imgEl, activeState, outputDs, stageBg, frameW, frameH, PAD, stageW, stageH, showGuides, natDims]);
+  }, [imgEl, activeState, outputDs, currentBgColor, frameW, frameH, PAD, stageW, stageH, showGuides, natDims, shadowEnabled, shadowBlur]);
 
   // ── Pointer events ─────────────────────────────────────────────────────
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!activeState) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    isDragging.current = true;
-    setGrabbing(true);
+    isDragging.current = true; setGrabbing(true);
     lastPt.current = { x: e.clientX, y: e.clientY };
   };
 
@@ -293,21 +239,19 @@ export default function ResizeClient() {
     const key = activeKey;
     setPerSize(prev => ({
       ...prev,
-      [key]: clampState({ ...prev[key], x: prev[key].x + dx, y: prev[key].y + dy }, natDims.w, natDims.h, activePreset.w, activePreset.h, isCover),
+      [key]: clampState({ ...prev[key], x: prev[key].x + dx, y: prev[key].y + dy }, natDims.w, natDims.h, activePreset.w, activePreset.h),
     }));
   };
 
   const onPointerUp = () => { isDragging.current = false; setGrabbing(false); lastPt.current = null; };
 
-  // ── Zoom ───────────────────────────────────────────────────────────────
+  // ── Zoom / Center / Reset ──────────────────────────────────────────────
   const handleZoom = (factor: number) => {
     if (!activeState || !natDims || !activePreset) return;
     const { w: outW, h: outH } = activePreset;
     const { w: natW, h: natH } = natDims;
     const newScale = activeState.scale * factor;
-    if (isCover && newScale < Math.max(outW / natW, outH / natH)) return;
-    if (!isCover && newScale < Math.min(outW / natW, outH / natH) * 0.05) return;
-    if (newScale > Math.max(outW / natW, outH / natH) * 8) return;
+    if (newScale < Math.min(outW / natW, outH / natH) * 0.05 || newScale > Math.max(outW / natW, outH / natH) * 8) return;
     const newW = natW * newScale, newH = natH * newScale;
     const curW = natW * activeState.scale, curH = natH * activeState.scale;
     const rx = curW > 0 ? (outW / 2 - activeState.x) / curW : 0.5;
@@ -315,11 +259,10 @@ export default function ResizeClient() {
     const key = activeKey;
     setPerSize(prev => ({
       ...prev,
-      [key]: clampState({ x: outW / 2 - rx * newW, y: outH / 2 - ry * newH, scale: newScale }, natW, natH, outW, outH, isCover),
+      [key]: clampState({ x: outW / 2 - rx * newW, y: outH / 2 - ry * newH, scale: newScale }, natW, natH, outW, outH),
     }));
   };
 
-  // ── Center ─────────────────────────────────────────────────────────────
   const handleCenter = () => {
     if (!natDims || !activePreset) return;
     const { w: outW, h: outH } = activePreset;
@@ -330,7 +273,6 @@ export default function ResizeClient() {
     });
   };
 
-  // ── Sync all ───────────────────────────────────────────────────────────
   const handleSyncAll = () => {
     if (!natDims || !activePreset || !activeState || selectedKeys.length < 2) return;
     const { w: outW, h: outH } = activePreset;
@@ -343,26 +285,22 @@ export default function ResizeClient() {
         if (key === activeKey) continue;
         const p = allSizes.find(p => p.key === key);
         if (!p) continue;
-        const scale = contentBounds && !isCover
+        const scale = contentBounds
           ? Math.min(p.w * (1 - 2 * margin) / contentBounds.w, p.h * (1 - 2 * margin) / contentBounds.h, Math.max(p.w / natDims.w, p.h / natDims.h) * 4)
           : activeState.scale;
-        next[key] = clampState({ x: p.w / 2 - scx * scale, y: p.h / 2 - scy * scale, scale }, natDims.w, natDims.h, p.w, p.h, isCover);
+        next[key] = clampState({ x: p.w / 2 - scx * scale, y: p.h / 2 - scy * scale, scale }, natDims.w, natDims.h, p.w, p.h);
       }
       return next;
     });
   };
 
-  // ── Reset current ──────────────────────────────────────────────────────
   const handleReset = () => {
     if (!natDims || !activePreset) return;
     const key = activeKey;
-    setPerSize(prev => ({
-      ...prev,
-      [key]: makeInitialState(natDims.w, natDims.h, activePreset.w, activePreset.h, isCover, !isCover ? contentBounds : null),
-    }));
+    setPerSize(prev => ({ ...prev, [key]: makeInitialState(natDims.w, natDims.h, activePreset.w, activePreset.h, contentBounds) }));
   };
 
-  // ── Toggle size ────────────────────────────────────────────────────────
+  // ── Size management ────────────────────────────────────────────────────
   const toggleSize = (p: SizePreset) => {
     if (selectedKeys.includes(p.key)) {
       const next = selectedKeys.filter(k => k !== p.key);
@@ -370,21 +308,20 @@ export default function ResizeClient() {
       setPerSize(prev => { const n = { ...prev }; delete n[p.key]; return n; });
       if (activeKey === p.key && next.length > 0) setActiveKey(next[next.length - 1]);
     } else {
-      const initState = natDims ? makeInitialState(natDims.w, natDims.h, p.w, p.h, isCover, !isCover ? contentBounds : null) : undefined;
+      const initState = natDims ? makeInitialState(natDims.w, natDims.h, p.w, p.h, contentBounds) : undefined;
       setSelectedKeys(prev => [...prev, p.key]);
       if (initState) setPerSize(prev => ({ ...prev, [p.key]: initState }));
       setActiveKey(p.key);
     }
   };
 
-  // ── Add custom size ────────────────────────────────────────────────────
   const addCustomSize = () => {
     const w = parseInt(customW, 10), h = parseInt(customH, 10);
     if (isNaN(w) || isNaN(h) || w < 1 || h < 1 || w > 10000 || h > 10000) return;
     const key = `${w}x${h}`;
     const newPreset: SizePreset = { key, w, h, label: `${w}×${h}` };
     if (!customSizes.find(p => p.key === key)) setCustomSizes(prev => [...prev, newPreset]);
-    const initState = natDims ? makeInitialState(natDims.w, natDims.h, w, h, isCover, !isCover ? contentBounds : null) : undefined;
+    const initState = natDims ? makeInitialState(natDims.w, natDims.h, w, h, contentBounds) : undefined;
     if (!selectedKeys.includes(key)) setSelectedKeys(prev => [...prev, key]);
     if (initState) setPerSize(prev => ({ ...prev, [key]: initState }));
     setActiveKey(key);
@@ -392,18 +329,24 @@ export default function ResizeClient() {
   };
 
   // ── Generate blob ──────────────────────────────────────────────────────
-  const generateBlob = useCallback((state: ImgState, outW: number, outH: number, fillColor?: string): Promise<Blob | null> => {
+  const generateBlob = useCallback((state: ImgState, outW: number, outH: number, bgColor: string): Promise<Blob | null> => {
     return new Promise(resolve => {
       if (!imgEl || !natDims) return resolve(null);
       const canvas = document.createElement("canvas");
       canvas.width = outW; canvas.height = outH;
       const ctx = canvas.getContext("2d");
       if (!ctx) return resolve(null);
-      if (fillColor) { ctx.fillStyle = fillColor; ctx.fillRect(0, 0, outW, outH); }
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, outW, outH);
+      if (shadowEnabled) {
+        ctx.shadowColor = "rgba(0,0,0,0.30)";
+        ctx.shadowBlur = shadowBlur;
+        ctx.shadowOffsetY = Math.round(shadowBlur * 0.4);
+      }
       ctx.drawImage(imgEl, 0, 0, imgEl.naturalWidth, imgEl.naturalHeight, state.x, state.y, natDims.w * state.scale, natDims.h * state.scale);
-      canvas.toBlob(resolve, file?.type || "image/jpeg", 0.95);
+      canvas.toBlob(resolve, "image/png");
     });
-  }, [imgEl, natDims, file]);
+  }, [imgEl, natDims, shadowEnabled, shadowBlur]);
 
   // ── Download ZIP ───────────────────────────────────────────────────────
   const handleDownload = async () => {
@@ -412,14 +355,17 @@ export default function ResizeClient() {
     setDownloading(true);
     const name = zipName.trim();
     const zip = new JSZip();
-    const fillColor = isCover ? undefined : detectedBg;
-    const ext = (file.name.split(".").pop() ?? "jpg").toLowerCase();
     for (const key of selectedKeys) {
       const state = perSize[key];
       const preset = allSizes.find(p => p.key === key);
       if (!state || !preset) continue;
-      const blob = await generateBlob(state, preset.w, preset.h, fillColor);
-      if (blob) zip.file(`${name}_${key}.${ext}`, blob);
+      for (const bgKey of selectedBgs) {
+        const bg = BG_OPTIONS.find(b => b.key === bgKey);
+        if (!bg) continue;
+        const blob = await generateBlob(state, preset.w, preset.h, bg.color);
+        const fname = selectedBgs.length > 1 ? `${bgKey}/${name}_${key}_${bgKey}.png` : `${name}_${key}.png`;
+        if (blob) zip.file(fname, blob);
+      }
     }
     const zipBlob = await zip.generateAsync({ type: "blob" });
     const url = URL.createObjectURL(zipBlob);
@@ -427,22 +373,18 @@ export default function ResizeClient() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
     isDownloading.current = false;
-    setDownloading(false);
-    setShowNameInput(false);
-    setZipName("");
+    setDownloading(false); setShowNameInput(false); setZipName("");
   };
 
-  // ── Reset all ──────────────────────────────────────────────────────────
   const resetAll = () => {
-    setFile(null); setImgEl(null); setNatDims(null);
-    setDetectedBg("rgb(255,255,255)"); setContentBounds(null);
+    setFile(null); setImgEl(null); setNatDims(null); setContentBounds(null);
     setSelectedKeys(SIZE_PRESETS.map(p => p.key));
     setPerSize({}); setActiveKey(SIZE_PRESETS[0].key);
     setCustomSizes([]);
     setShowNameInput(false); setZipName("");
   };
 
-  // ── Preview scale ──────────────────────────────────────────────────────
+  const fileCount = selectedKeys.length * Math.max(selectedBgs.length, 1);
   const maxPreviewDim = Math.max(...selectedKeys.map(k => { const p = allSizes.find(p => p.key === k); return p ? Math.max(p.w, p.h) : 0; }), 1);
   const globalPds = 160 / maxPreviewDim;
 
@@ -455,54 +397,84 @@ export default function ResizeClient() {
 
         {/* Upload */}
         <div style={{ padding: "20px 16px 0" }}>
-          <p style={sectionLabel}>이미지</p>
+          <p style={sectionLabel}>누끼컷 PNG</p>
           <div
             onClick={() => fileInputRef.current?.click()}
             onDragOver={e => e.preventDefault()}
             onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
-            style={{ border: "1.5px dashed rgba(0,0,0,0.14)", borderRadius: 12, padding: "14px 12px", cursor: "pointer", textAlign: "center", transition: "border-color 0.15s" }}
+            style={{ border: "1.5px dashed rgba(0,0,0,0.14)", borderRadius: 12, padding: "14px 12px", cursor: "pointer", textAlign: "center" }}
           >
-            <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+            <input ref={fileInputRef} type="file" accept="image/png,image/webp" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
             {imgEl ? (
               <div>
-                <img src={imgEl.src} alt="" style={{ maxHeight: 96, maxWidth: "100%", objectFit: "contain", borderRadius: 8 }} />
+                <div style={{ background: "repeating-conic-gradient(#d1d5db 0% 25%, #fff 0% 50%) 0 0 / 12px 12px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", maxHeight: 96, overflow: "hidden" }}>
+                  <img src={imgEl.src} alt="" style={{ maxHeight: 96, maxWidth: "100%", objectFit: "contain" }} />
+                </div>
                 <p style={{ fontSize: 11, color: "#6e6e73", marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file?.name}</p>
                 {natDims && <p style={{ fontSize: 10, color: "#aeaeb2", marginTop: 2 }}>{natDims.w} × {natDims.h} px</p>}
               </div>
             ) : (
               <div style={{ padding: "8px 0" }}>
-                <div style={{ fontSize: 28, marginBottom: 6, color: "#aeaeb2" }}>↑</div>
-                <p style={{ fontSize: 13, fontWeight: 500, color: "#3c3c43", margin: 0 }}>이미지 업로드</p>
-                <p style={{ fontSize: 11, color: "#aeaeb2", marginTop: 3, margin: "3px 0 0" }}>클릭 또는 드래그</p>
+                <div style={{ fontSize: 28, marginBottom: 6, color: "#aeaeb2" }}>✂️</div>
+                <p style={{ fontSize: 13, fontWeight: 500, color: "#3c3c43", margin: 0 }}>누끼컷 업로드</p>
+                <p style={{ fontSize: 11, color: "#aeaeb2", marginTop: 3, margin: "3px 0 0" }}>투명 배경 PNG · WebP</p>
               </div>
             )}
           </div>
-          {file && (
-            <button onClick={resetAll} style={{ marginTop: 6, width: "100%", fontSize: 11, color: "#ff3b30", background: "none", border: "none", cursor: "pointer", padding: "4px 0" }}>
-              초기화
-            </button>
-          )}
+          {file && <button onClick={resetAll} style={{ marginTop: 6, width: "100%", fontSize: 11, color: "#ff3b30", background: "none", border: "none", cursor: "pointer", padding: "4px 0" }}>초기화</button>}
         </div>
 
-        {/* Mode */}
+        {/* Background */}
         <div style={{ padding: "20px 16px 0" }}>
-          <p style={sectionLabel}>리사이즈 방식</p>
-          <div style={{ display: "flex", background: "#F5F5F7", borderRadius: 10, padding: 2 }}>
-            {(["cutout", "scene"] as const).map(m => (
-              <button key={m} onClick={() => setResizeMode(m)} style={{
-                flex: 1, padding: "6px 0", borderRadius: 8, fontSize: 12, fontWeight: 500, border: "none", cursor: "pointer",
-                transition: "all 0.15s",
-                background: resizeMode === m ? "#fff" : "transparent",
-                color: resizeMode === m ? "#1d1d1f" : "#6e6e73",
-                boxShadow: resizeMode === m ? "0 1px 3px rgba(0,0,0,0.10)" : "none",
-              }}>
-                {m === "cutout" ? "누끼컷" : "크롭컷"}
-              </button>
-            ))}
+          <p style={sectionLabel}>배경색</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {BG_OPTIONS.map(bg => {
+              const sel = selectedBgs.includes(bg.key);
+              const act = activeBg === bg.key && sel;
+              return (
+                <div key={bg.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, border: `1.5px solid ${sel ? "rgba(0,113,227,0.35)" : "rgba(0,0,0,0.1)"}`, background: sel ? "rgba(0,113,227,0.04)" : "#fff", cursor: "pointer", transition: "all 0.12s" }}
+                  onClick={() => {
+                    if (sel && selectedBgs.length === 1) return;
+                    if (sel) { setSelectedBgs(prev => prev.filter(k => k !== bg.key)); if (activeBg === bg.key) setActiveBg(selectedBgs.find(k => k !== bg.key) ?? "white"); }
+                    else { setSelectedBgs(prev => [...prev, bg.key]); setActiveBg(bg.key); }
+                  }}>
+                  <div style={{ width: 24, height: 24, borderRadius: 6, background: bg.color, border: "1px solid rgba(0,0,0,0.1)", flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 12, fontWeight: 500, color: "#1d1d1f", margin: 0 }}>{bg.label}</p>
+                    <p style={{ fontSize: 10, color: "#aeaeb2", margin: 0 }}>{bg.color}</p>
+                  </div>
+                  {sel && (
+                    <button onClick={e => { e.stopPropagation(); setActiveBg(bg.key); }} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, border: `1px solid ${act ? APPLE_BLUE : "rgba(0,0,0,0.1)"}`, background: act ? APPLE_BLUE : "#fff", color: act ? "#fff" : "#6e6e73", cursor: "pointer" }}>
+                      {act ? "미리보기" : "선택"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
-          <p style={{ fontSize: 11, color: "#aeaeb2", marginTop: 6, lineHeight: 1.45, margin: "6px 0 0" }}>
-            {resizeMode === "cutout" ? "배경 확장 · 전체 제품 표시" : "프레임 꽉 채우기 · 크롭"}
-          </p>
+          {selectedBgs.length > 1 && <p style={{ fontSize: 10, color: "#aeaeb2", marginTop: 6 }}>두 색상 모두 내보냅니다 → 폴더로 분리</p>}
+        </div>
+
+        {/* Shadow */}
+        <div style={{ padding: "16px 16px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: shadowEnabled ? 10 : 0 }}>
+            <p style={{ ...sectionLabel, margin: 0 }}>그림자</p>
+            <button onClick={() => setShadowEnabled(v => !v)} style={{
+              padding: "4px 12px", borderRadius: 8, fontSize: 11, fontWeight: 500, border: "none", cursor: "pointer", transition: "all 0.15s",
+              background: shadowEnabled ? "#1d1d1f" : "#F5F5F7",
+              color: shadowEnabled ? "#fff" : "#6e6e73",
+            }}>
+              {shadowEnabled ? "적용 중" : "끔"}
+            </button>
+          </div>
+          {shadowEnabled && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#aeaeb2", marginBottom: 4 }}>
+                <span>강도</span><span>{shadowBlur}</span>
+              </div>
+              <input type="range" min={5} max={60} value={shadowBlur} onChange={e => setShadowBlur(Number(e.target.value))} style={{ width: "100%", accentColor: "#1d1d1f" }} />
+            </div>
+          )}
         </div>
 
         {/* Sizes */}
@@ -514,7 +486,7 @@ export default function ResizeClient() {
               if (allSel) { setSelectedKeys([]); setPerSize({}); }
               else {
                 const next: Record<string, ImgState> = {};
-                if (natDims) for (const p of allSizes) next[p.key] = makeInitialState(natDims.w, natDims.h, p.w, p.h, isCover, !isCover ? contentBounds : null);
+                if (natDims) for (const p of allSizes) next[p.key] = makeInitialState(natDims.w, natDims.h, p.w, p.h, contentBounds);
                 setSelectedKeys(allSizes.map(p => p.key));
                 setPerSize(prev => ({ ...prev, ...next }));
               }
@@ -528,42 +500,21 @@ export default function ResizeClient() {
               const act = activeKey === p.key && sel;
               return (
                 <div key={p.key} style={{ display: "flex", alignItems: "center", borderRadius: 8, overflow: "hidden" }}>
-                  <button
-                    onClick={() => { if (sel) setActiveKey(p.key); else toggleSize(p); }}
-                    style={{
-                      flex: 1, padding: "7px 10px", border: "none", cursor: "pointer", textAlign: "left",
-                      background: act ? "rgba(0,113,227,0.08)" : sel ? "#F5F5F7" : "transparent",
-                      color: act ? APPLE_BLUE : sel ? "#1d1d1f" : "#aeaeb2",
-                      fontSize: 12, fontWeight: act ? 600 : sel ? 400 : 400,
-                      transition: "all 0.1s",
-                    }}>
+                  <button onClick={() => { if (sel) setActiveKey(p.key); else toggleSize(p); }} style={{ flex: 1, padding: "7px 10px", border: "none", cursor: "pointer", textAlign: "left", background: act ? "rgba(0,113,227,0.08)" : sel ? "#F5F5F7" : "transparent", color: act ? APPLE_BLUE : sel ? "#1d1d1f" : "#aeaeb2", fontSize: 12, fontWeight: act ? 600 : 400, transition: "all 0.1s" }}>
                     {p.label}
                   </button>
-                  <button
-                    onClick={() => toggleSize(p)}
-                    style={{
-                      padding: "7px 8px", border: "none", cursor: "pointer", fontSize: 11, lineHeight: 1,
-                      background: act ? "rgba(0,113,227,0.08)" : sel ? "#F5F5F7" : "transparent",
-                      color: sel ? "#aeaeb2" : "#c7c7cc",
-                      transition: "all 0.1s",
-                    }}>
+                  <button onClick={() => toggleSize(p)} style={{ padding: "7px 8px", border: "none", cursor: "pointer", fontSize: 11, lineHeight: 1, background: act ? "rgba(0,113,227,0.08)" : sel ? "#F5F5F7" : "transparent", color: sel ? "#aeaeb2" : "#c7c7cc", transition: "all 0.1s" }}>
                     {sel ? "×" : "+"}
                   </button>
                 </div>
               );
             })}
           </div>
-          {/* Custom size */}
           <div style={{ marginTop: 10, display: "flex", gap: 5, alignItems: "center" }}>
-            <input type="number" placeholder="너비" value={customW} onChange={e => setCustomW(e.target.value)} onKeyDown={e => e.key === "Enter" && addCustomSize()}
-              style={{ flex: 1, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 7, padding: "5px 7px", fontSize: 11, outline: "none", color: "#1d1d1f" }} />
+            <input type="number" placeholder="너비" value={customW} onChange={e => setCustomW(e.target.value)} onKeyDown={e => e.key === "Enter" && addCustomSize()} style={{ flex: 1, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 7, padding: "5px 7px", fontSize: 11, outline: "none", color: "#1d1d1f" }} />
             <span style={{ fontSize: 11, color: "#aeaeb2" }}>×</span>
-            <input type="number" placeholder="높이" value={customH} onChange={e => setCustomH(e.target.value)} onKeyDown={e => e.key === "Enter" && addCustomSize()}
-              style={{ flex: 1, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 7, padding: "5px 7px", fontSize: 11, outline: "none", color: "#1d1d1f" }} />
-            <button onClick={addCustomSize} disabled={!customW || !customH}
-              style={{ padding: "5px 8px", borderRadius: 7, background: "#1d1d1f", color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 500, opacity: (!customW || !customH) ? 0.35 : 1 }}>
-              추가
-            </button>
+            <input type="number" placeholder="높이" value={customH} onChange={e => setCustomH(e.target.value)} onKeyDown={e => e.key === "Enter" && addCustomSize()} style={{ flex: 1, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 7, padding: "5px 7px", fontSize: 11, outline: "none", color: "#1d1d1f" }} />
+            <button onClick={addCustomSize} disabled={!customW || !customH} style={{ padding: "5px 8px", borderRadius: 7, background: "#1d1d1f", color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 500, opacity: (!customW || !customH) ? 0.35 : 1 }}>추가</button>
           </div>
         </div>
       </aside>
@@ -575,47 +526,44 @@ export default function ResizeClient() {
         ) : (
           <>
             {/* Size tabs */}
-            <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.06)", display: "flex", alignItems: "center", padding: "0 20px", overflowX: "auto", flexShrink: 0, gap: 0 }}>
+            <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.06)", display: "flex", alignItems: "center", padding: "0 20px", overflowX: "auto", flexShrink: 0 }}>
               {selectedKeys.map(key => {
                 const p = allSizes.find(p => p.key === key);
                 const act = key === activeKey;
                 return (
-                  <button key={key} onClick={() => setActiveKey(key)} style={{
-                    padding: "11px 14px", fontSize: 12, fontWeight: act ? 600 : 400,
-                    border: "none", borderBottom: `2px solid ${act ? APPLE_BLUE : "transparent"}`,
-                    background: "transparent", color: act ? APPLE_BLUE : "#6e6e73",
-                    cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.15s",
-                  }}>
+                  <button key={key} onClick={() => setActiveKey(key)} style={{ padding: "11px 14px", fontSize: 12, fontWeight: act ? 600 : 400, border: "none", borderBottom: `2px solid ${act ? APPLE_BLUE : "transparent"}`, background: "transparent", color: act ? APPLE_BLUE : "#6e6e73", cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.15s" }}>
                     {p?.label ?? key}
                   </button>
                 );
               })}
-              {selectedKeys.length === 0 && <span style={{ fontSize: 12, color: "#aeaeb2", padding: "11px 0" }}>왼쪽에서 사이즈를 선택하세요</span>}
+              {/* Bg switcher in tabs row if multiple bgs */}
+              {selectedBgs.length > 1 && activePreset && (
+                <div style={{ marginLeft: "auto", display: "flex", gap: 4, paddingRight: 4 }}>
+                  {selectedBgs.map(bgKey => {
+                    const bg = BG_OPTIONS.find(b => b.key === bgKey);
+                    const act = activeBg === bgKey;
+                    return (
+                      <button key={bgKey} onClick={() => setActiveBg(bgKey)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 8, border: `1px solid ${act ? APPLE_BLUE : "rgba(0,0,0,0.1)"}`, background: act ? "rgba(0,113,227,0.06)" : "#fff", cursor: "pointer", fontSize: 11, color: act ? APPLE_BLUE : "#6e6e73", fontWeight: act ? 600 : 400 }}>
+                        <div style={{ width: 12, height: 12, borderRadius: 3, background: bg?.color, border: "1px solid rgba(0,0,0,0.12)" }} />
+                        {bg?.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            {/* Scrollable content */}
+            {/* Content */}
             <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
               {activePreset && activeState ? (
                 <>
-                  {/* Canvas editor */}
                   <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-                    <canvas
-                      ref={canvasRef}
-                      style={{ cursor: grabbing ? "grabbing" : "grab", borderRadius: 6, display: "block" }}
-                      onPointerDown={onPointerDown}
-                      onPointerMove={onPointerMove}
-                      onPointerUp={onPointerUp}
-                      onPointerLeave={onPointerUp}
-                    />
+                    <canvas ref={canvasRef} style={{ cursor: grabbing ? "grabbing" : "grab", borderRadius: 6, display: "block" }} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerUp} />
                   </div>
-
-                  {/* Controls */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
-                    <span style={{ fontSize: 11, color: "#aeaeb2" }}>{activePreset.w} × {activePreset.h} px</span>
+                    <span style={{ fontSize: 11, color: "#aeaeb2" }}>{activePreset.w} × {activePreset.h} px · PNG</span>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {[{ l: "+", fn: () => handleZoom(1.2) }, { l: "−", fn: () => handleZoom(1 / 1.2) }].map(b => (
-                        <button key={b.l} onClick={b.fn} style={ctrlBtn}>{b.l}</button>
-                      ))}
+                      {[{ l: "+", fn: () => handleZoom(1.2) }, { l: "−", fn: () => handleZoom(1 / 1.2) }].map(b => <button key={b.l} onClick={b.fn} style={ctrlBtn}>{b.l}</button>)}
                       <Divider />
                       <button onClick={handleCenter} style={ctrlBtn}>중앙</button>
                       <button onClick={() => setShowGuides(v => !v)} style={{ ...ctrlBtn, ...(showGuides ? { background: "rgba(0,113,227,0.08)", color: APPLE_BLUE, borderColor: "rgba(0,113,227,0.3)" } : {}) }}>가이드</button>
@@ -626,9 +574,7 @@ export default function ResizeClient() {
                   </div>
                 </>
               ) : (
-                <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", fontSize: 13 }}>
-                  왼쪽에서 사이즈를 선택하세요
-                </div>
+                <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: "#aeaeb2", fontSize: 13 }}>왼쪽에서 사이즈를 선택하세요</div>
               )}
 
               {/* Preview grid */}
@@ -642,20 +588,12 @@ export default function ResizeClient() {
                       if (!p || !state) return null;
                       const pDs = Math.max(globalPds, 48 / Math.min(p.w, p.h));
                       const act = key === activeKey;
-                      const bg = isCover ? "#e5e7eb" : detectedBg;
                       return (
-                        <div key={key} onClick={() => setActiveKey(key)} style={{
-                          cursor: "pointer", borderRadius: 10, overflow: "hidden",
-                          border: `2px solid ${act ? APPLE_BLUE : "rgba(0,0,0,0.08)"}`,
-                          boxShadow: act ? `0 0 0 3px rgba(0,113,227,0.15)` : "none",
-                          transition: "all 0.15s",
-                        }}>
-                          <div style={{ position: "relative", width: p.w * pDs, height: p.h * pDs, background: bg, overflow: "hidden" }}>
+                        <div key={key} onClick={() => setActiveKey(key)} style={{ cursor: "pointer", borderRadius: 10, overflow: "hidden", border: `2px solid ${act ? APPLE_BLUE : "rgba(0,0,0,0.08)"}`, boxShadow: act ? `0 0 0 3px rgba(0,113,227,0.15)` : "none", transition: "all 0.15s" }}>
+                          <div style={{ position: "relative", width: p.w * pDs, height: p.h * pDs, background: currentBgColor, overflow: "hidden" }}>
                             <img src={imgEl.src} alt="" draggable={false} style={{ position: "absolute", left: state.x * pDs, top: state.y * pDs, width: natDims.w * state.scale * pDs, height: natDims.h * state.scale * pDs, pointerEvents: "none", userSelect: "none" }} />
                           </div>
-                          <div style={{ padding: "4px 6px", background: act ? "rgba(0,113,227,0.06)" : "#FAFAFA", textAlign: "center", fontSize: 10, fontWeight: act ? 600 : 400, color: act ? APPLE_BLUE : "#6e6e73" }}>
-                            {p.label}
-                          </div>
+                          <div style={{ padding: "4px 6px", background: act ? "rgba(0,113,227,0.06)" : "#FAFAFA", textAlign: "center", fontSize: 10, fontWeight: act ? 600 : 400, color: act ? APPLE_BLUE : "#6e6e73" }}>{p.label}</div>
                         </div>
                       );
                     })}
@@ -677,7 +615,7 @@ export default function ResizeClient() {
                     </>
                   ) : (
                     <button onClick={() => setShowNameInput(true)} style={downloadBtn}>
-                      ZIP 다운로드 ({selectedKeys.length}개)
+                      ZIP 다운로드 ({fileCount}개)
                     </button>
                   )}
                 </div>
@@ -690,17 +628,17 @@ export default function ResizeClient() {
   );
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────
+// ── Sub-components & Styles ────────────────────────────────────────────────
 function EmptyState() {
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#aeaeb2", gap: 10 }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
       <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
         <rect x="6" y="10" width="36" height="28" rx="4" stroke="#C7C7CC" strokeWidth="2"/>
         <circle cx="16" cy="20" r="3.5" stroke="#C7C7CC" strokeWidth="1.5"/>
         <path d="M6 32l9-9 7 7 5-5 9 9" stroke="#C7C7CC" strokeWidth="1.5" strokeLinejoin="round"/>
       </svg>
-      <p style={{ fontSize: 15, fontWeight: 500, color: "#3c3c43", margin: 0 }}>왼쪽에서 이미지를 업로드하세요</p>
-      <p style={{ fontSize: 12, margin: 0 }}>JPG, PNG, WebP 등 지원</p>
+      <p style={{ fontSize: 15, fontWeight: 500, color: "#3c3c43", margin: 0 }}>왼쪽에서 누끼컷 PNG를 업로드하세요</p>
+      <p style={{ fontSize: 12, color: "#aeaeb2", margin: 0 }}>투명 배경 PNG · WebP 지원</p>
     </div>
   );
 }
@@ -709,7 +647,6 @@ function Divider() {
   return <div style={{ width: 1, height: 20, background: "rgba(0,0,0,0.1)", alignSelf: "center" }} />;
 }
 
-// ── Shared styles ──────────────────────────────────────────────────────────
 const sectionLabel: React.CSSProperties = {
   fontSize: 11, fontWeight: 600, color: "#6e6e73",
   textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 10,

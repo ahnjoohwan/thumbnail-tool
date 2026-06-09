@@ -1,5 +1,5 @@
-import ResizeClient from "@/app/resize/ResizeClient";
+import ThumbnailClient from "./ThumbnailClient";
 
-export default function Page() {
-  return <ResizeClient defaultTab="thumbnail" />;
+export default function ThumbnailPage() {
+  return <ThumbnailClient />;
 }
