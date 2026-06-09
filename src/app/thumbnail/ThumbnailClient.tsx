@@ -587,16 +587,19 @@ export default function ThumbnailClient() {
               {selectedKeys.length > 0 && natDims && imgEl && (
                 <div style={{ marginTop: 28, paddingTop: 24, borderTop: "1px solid rgba(0,0,0,0.06)" }}>
                   <p style={{ ...sectionLabel, marginBottom: 14 }}>사이즈별 미리보기</p>
-                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+                  <div style={{ display: "flex", gap: 12, overflowX: "auto", overflowY: "hidden", alignItems: "flex-end", paddingBottom: 4 }}>
                     {selectedKeys.map(key => {
                       const p = allSizes.find(p => p.key === key);
                       const state = perSize[key];
                       if (!p || !state) return null;
-                      const pDs = Math.max(globalPds, 48 / Math.min(p.w, p.h));
+                      const pDs = Math.min(
+                        Math.max(globalPds, 48 / Math.min(p.w, p.h)),
+                        164 / p.h
+                      );
                       const act = key === activeKey;
                       return (
-                        <div key={key} onClick={() => setActiveKey(key)} style={{ cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                          <div style={{ height: 164, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+                        <div key={key} onClick={() => setActiveKey(key)} style={{ cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+                          <div style={{ height: 164, display: "flex", alignItems: "flex-end", justifyContent: "center", overflow: "hidden" }}>
                             <div style={{
                               borderRadius: 10, overflow: "hidden",
                               border: `2px solid ${act ? APPLE_BLUE : "rgba(0,0,0,0.08)"}`,
