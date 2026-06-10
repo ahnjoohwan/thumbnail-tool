@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 
 const tabs = [
   { href: "/resize", label: "썸네일 리사이즈" },
+  { href: "/bulk", label: "썸네일 리사이즈 (대량)" },
   { href: "/thumbnail", label: "썸네일 만들기" },
 ];
 
