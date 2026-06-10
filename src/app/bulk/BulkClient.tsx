@@ -146,12 +146,16 @@ export default function BulkClient() {
   const [resizeMode, setResizeMode] = useState<ResizeMode>("cutout");
   const [downloading, setDownloading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [customSizes, setCustomSizes] = useState<SizePreset[]>([]);
+  const [customW, setCustomW] = useState("");
+  const [customH, setCustomH] = useState("");
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [modalState, setModalState] = useState<ImgState | null>(null);
   const [modalGrabbing, setModalGrabbing] = useState(false);
 
-  const targetPreset = SIZE_PRESETS.find(p => p.key === targetKey)!;
+  const allSizes = [...SIZE_PRESETS, ...customSizes];
+  const targetPreset = allSizes.find(p => p.key === targetKey) ?? SIZE_PRESETS[0];
   const isCover = resizeMode === "scene";
 
   // Clear custom states when target size or mode changes
@@ -193,6 +197,16 @@ export default function BulkClient() {
   }, []);
 
   const removeItem = (id: string) => setItems(prev => prev.filter(i => i.id !== id));
+
+  const addCustomSize = () => {
+    const w = parseInt(customW, 10), h = parseInt(customH, 10);
+    if (isNaN(w) || isNaN(h) || w < 1 || h < 1 || w > 10000 || h > 10000) return;
+    const key = `${w}x${h}`;
+    const newPreset: SizePreset = { key, w, h, label: `${w}×${h}` };
+    if (!customSizes.find(p => p.key === key)) setCustomSizes(prev => [...prev, newPreset]);
+    setTargetKey(key);
+    setCustomW(""); setCustomH("");
+  };
 
   // ── Modal open/close ───────────────────────────────────────────────────────
   const openEdit = (item: ImageItem) => {
@@ -399,7 +413,7 @@ export default function BulkClient() {
         <div style={{ padding: "20px 16px 16px", flex: 1 }}>
           <p style={sectionLabel}>출력 사이즈</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            {SIZE_PRESETS.map(p => {
+            {allSizes.map(p => {
               const act = p.key === targetKey;
               return (
                 <button key={p.key} onClick={() => setTargetKey(p.key)} style={{
@@ -412,6 +426,18 @@ export default function BulkClient() {
                 </button>
               );
             })}
+          </div>
+          {/* Custom size input */}
+          <div style={{ marginTop: 10, display: "flex", gap: 5, alignItems: "center" }}>
+            <input type="number" placeholder="너비" value={customW} onChange={e => setCustomW(e.target.value)} onKeyDown={e => e.key === "Enter" && addCustomSize()}
+              style={{ flex: "0 0 56px", width: 56, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 7, padding: "5px 6px", fontSize: 11, outline: "none", color: "#1d1d1f" }} />
+            <span style={{ fontSize: 11, color: "#aeaeb2", flexShrink: 0 }}>×</span>
+            <input type="number" placeholder="높이" value={customH} onChange={e => setCustomH(e.target.value)} onKeyDown={e => e.key === "Enter" && addCustomSize()}
+              style={{ flex: "0 0 56px", width: 56, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 7, padding: "5px 6px", fontSize: 11, outline: "none", color: "#1d1d1f" }} />
+            <button onClick={addCustomSize} disabled={!customW || !customH}
+              style={{ padding: "5px 8px", borderRadius: 7, background: "#1d1d1f", color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 500, opacity: (!customW || !customH) ? 0.35 : 1 }}>
+              추가
+            </button>
           </div>
         </div>
       </aside>
