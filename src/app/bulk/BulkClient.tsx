@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import JSZip from "jszip";
 import PreviewCanvas from "@/components/PreviewCanvas";
+import AdSlot from "@/components/AdSlot";
 
 type ImgState = { x: number; y: number; scale: number };
 type ResizeMode = "cutout" | "scene";
@@ -563,6 +564,10 @@ export default function BulkClient() {
               }}>
                 {downloading ? "압축 중…" : `ZIP 다운로드 (${items.length}개)`}
               </button>
+            </div>
+
+            <div style={{ marginTop: 24 }}>
+              <AdSlot />
             </div>
           </div>
         )}

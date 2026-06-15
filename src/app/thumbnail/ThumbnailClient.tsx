@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import JSZip from "jszip";
 import PreviewCanvas from "@/components/PreviewCanvas";
+import AdSlot from "@/components/AdSlot";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type ImgState = { x: number; y: number; scale: number };
@@ -640,6 +641,10 @@ export default function ThumbnailClient() {
                   )}
                 </div>
               )}
+
+              <div style={{ marginTop: 24 }}>
+                <AdSlot />
+              </div>
             </div>
           </>
         )}
