@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import ResizeClient from "./resize/ResizeClient";
 
 export default function Home() {
-  redirect("/resize");
+  return <ResizeClient />;
 }
