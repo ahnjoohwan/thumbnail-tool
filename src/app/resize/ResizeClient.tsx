@@ -705,7 +705,7 @@ export default function ResizeClient() {
                     </>
                   ) : (
                     <button onClick={() => setShowNameInput(true)} style={downloadBtn}>
-                      ZIP 다운로드 ({selectedKeys.length}개)
+                      다운로드 ({selectedKeys.length}개)
                     </button>
                   )}
                 </div>

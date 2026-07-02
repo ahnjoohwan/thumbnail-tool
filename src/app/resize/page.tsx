@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import ResizeClient from "./ResizeClient";
-import ContentSection from "@/components/ContentSection";
-import { resizeContent } from "@/content/pages";
 
 export const metadata: Metadata = {
   title: "이미지 썸네일 리사이즈",
@@ -11,9 +9,6 @@ export const metadata: Metadata = {
 
 export default function ResizePage() {
   return (
-    <>
-      <ResizeClient />
-      <ContentSection content={resizeContent} />
-    </>
+    <ResizeClient />
   );
 }

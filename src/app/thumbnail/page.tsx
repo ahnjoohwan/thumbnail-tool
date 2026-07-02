@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import ThumbnailClient from "./ThumbnailClient";
-import ContentSection from "@/components/ContentSection";
-import { thumbnailContent } from "@/content/pages";
 
 export const metadata: Metadata = {
   title: "상품 썸네일 만들기",
@@ -11,9 +9,6 @@ export const metadata: Metadata = {
 
 export default function ThumbnailPage() {
   return (
-    <>
-      <ThumbnailClient />
-      <ContentSection content={thumbnailContent} />
-    </>
+    <ThumbnailClient />
   );
 }

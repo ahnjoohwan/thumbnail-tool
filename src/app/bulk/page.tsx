@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import BulkClient from "./BulkClient";
-import ContentSection from "@/components/ContentSection";
-import { bulkContent } from "@/content/pages";
 
 export const metadata: Metadata = {
   title: "이미지 대량 리사이즈",
@@ -11,9 +9,6 @@ export const metadata: Metadata = {
 
 export default function BulkPage() {
   return (
-    <>
-      <BulkClient />
-      <ContentSection content={bulkContent} />
-    </>
+    <BulkClient />
   );
 }

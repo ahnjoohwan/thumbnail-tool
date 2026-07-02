@@ -647,7 +647,7 @@ export default function ThumbnailClient() {
                     </>
                   ) : (
                     <button onClick={() => setShowNameInput(true)} style={downloadBtn}>
-                      ZIP 다운로드 ({fileCount}개)
+                      다운로드 ({fileCount}개)
                     </button>
                   )}
                 </div>
