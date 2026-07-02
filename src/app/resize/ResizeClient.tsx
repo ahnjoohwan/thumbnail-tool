@@ -422,21 +422,32 @@ export default function ResizeClient() {
     isDownloading.current = true;
     setDownloading(true);
     const name = zipName.trim();
-    const zip = new JSZip();
     const fillColor = isCover ? undefined : detectedBg;
     const ext = (file.name.split(".").pop() ?? "jpg").toLowerCase();
+    const files: { fname: string; blob: Blob }[] = [];
     for (const key of selectedKeys) {
       const state = perSize[key];
       const preset = allSizes.find(p => p.key === key);
       if (!state || !preset) continue;
       const blob = await generateBlob(state, preset.w, preset.h, fillColor);
-      if (blob) zip.file(`${name}_${key}.${ext}`, blob);
+      if (blob) files.push({ fname: `${name}_${key}.${ext}`, blob });
     }
-    const zipBlob = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(zipBlob);
-    const a = document.createElement("a"); a.href = url; a.download = `${name}.zip`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if (files.length === 1) {
+      // 작업본이 1개면 압축하지 않고 개별 파일로 다운로드
+      const { fname, blob } = files[0];
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = fname;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } else if (files.length > 0) {
+      const zip = new JSZip();
+      for (const { fname, blob } of files) zip.file(fname, blob);
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a"); a.href = url; a.download = `${name}.zip`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
     isDownloading.current = false;
     setDownloading(false);
     setShowNameInput(false);
@@ -688,7 +699,7 @@ export default function ResizeClient() {
                       <input autoFocus type="text" placeholder="파일명 (예: 상품명)" value={zipName} onChange={e => setZipName(e.target.value)} onKeyDown={e => e.key === "Enter" && void handleDownload()}
                         style={{ border: "1px solid rgba(0,0,0,0.14)", borderRadius: 10, padding: "8px 14px", fontSize: 13, outline: "none", width: 200, color: "#1d1d1f" }} />
                       <button onClick={() => void handleDownload()} disabled={downloading || !zipName.trim()} style={{ ...downloadBtn, opacity: (downloading || !zipName.trim()) ? 0.45 : 1 }}>
-                        {downloading ? "압축 중…" : "저장"}
+                        {downloading ? "처리 중…" : "저장"}
                       </button>
                       <button onClick={() => { setShowNameInput(false); setZipName(""); }} style={cancelBtn}>취소</button>
                     </>

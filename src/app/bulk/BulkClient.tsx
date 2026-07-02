@@ -360,22 +360,33 @@ export default function BulkClient() {
     if (isDownloading.current || items.length === 0) return;
     isDownloading.current = true;
     setDownloading(true);
-    const zip = new JSZip();
+    const files: { fname: string; blob: Blob }[] = [];
     for (const item of items) {
       const blob = await generateBlob(item);
       if (blob) {
         const ext = (item.file.name.split(".").pop() ?? "jpg").toLowerCase();
         const base = item.file.name.replace(/\.[^.]+$/, "");
-        zip.file(`${base}_${targetPreset.key}.${ext}`, blob);
+        files.push({ fname: `${base}_${targetPreset.key}.${ext}`, blob });
       }
     }
-    const zipBlob = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(zipBlob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `bulk_${targetPreset.key}.zip`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if (files.length === 1) {
+      // 작업본이 1개면 압축하지 않고 개별 파일로 다운로드
+      const { fname, blob } = files[0];
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = fname;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } else if (files.length > 0) {
+      const zip = new JSZip();
+      for (const { fname, blob } of files) zip.file(fname, blob);
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `bulk_${targetPreset.key}.zip`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
     isDownloading.current = false;
     setDownloading(false);
   };
@@ -562,7 +573,7 @@ export default function BulkClient() {
                 color: "#fff", border: "none", cursor: downloading ? "not-allowed" : "pointer",
                 fontSize: 13, fontWeight: 600, opacity: downloading ? 0.45 : 1, transition: "opacity 0.15s",
               }}>
-                {downloading ? "압축 중…" : `ZIP 다운로드 (${items.length}개)`}
+                {downloading ? "처리 중…" : items.length === 1 ? "다운로드 (1개)" : `ZIP 다운로드 (${items.length}개)`}
               </button>
             </div>
 
