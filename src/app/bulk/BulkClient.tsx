@@ -573,7 +573,7 @@ export default function BulkClient() {
                 color: "#fff", border: "none", cursor: downloading ? "not-allowed" : "pointer",
                 fontSize: 13, fontWeight: 600, opacity: downloading ? 0.45 : 1, transition: "opacity 0.15s",
               }}>
-                {downloading ? "처리 중…" : items.length === 1 ? "다운로드 (1개)" : `ZIP 다운로드 (${items.length}개)`}
+                {downloading ? "처리 중…" : `다운로드 (${items.length}개)`}
               </button>
             </div>
 
